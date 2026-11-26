@@ -19,7 +19,7 @@ def verify(pub, signature, message):
         return True
     except (InvalidSignature, ValueError):
         return False
-
+#helper fcts for authentication tag generation
 def tag(key, message):
     return hmac.digest(key, message, 'sha256')
 
@@ -29,6 +29,7 @@ def check(key, message, value):
 def status(value):
     return 'NO KEY' if value is None else 'VALID' if value else 'INVALID'
 
+#if context = True, it would take alice's key from part a
 def run(context=None, live=False, message=ALICE_MESSAGE, forged=BOB_MESSAGE):
     if context is None:
         alice = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -38,19 +39,22 @@ def run(context=None, live=False, message=ALICE_MESSAGE, forged=BOB_MESSAGE):
         pub, msg, sig = (context[k] for k in ('pub', 'msg', 'sig'))
     key = secrets.token_bytes(32)
     original_tag = tag(key, msg) #alice generates her tag
-    bob = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    same = forged == msg
+    bob = rsa.generate_private_key(public_exponent=65537, key_size=2048) #bob generates his own rsa key pair
+    same = forged == msg #if same =True, then bob's forged message is exactly the same as alice
     bob_sig = bob.sign(forged, PSS, hashes.SHA256())
     bob_tag = tag(key, forged)
-    baseline = (verify(pub, sig, msg), check(key, msg, original_tag))
+    #experiment 1:
+    baseline = (verify(pub, sig, msg), check(key, msg, original_tag)) 
+    #experiment 2:
     receiver = (verify(pub, bob_sig, forged), check(key, forged, bob_tag))
-
+    #experiment 3:
     third_party = (verify(pub, sig, msg), None)
     assert baseline == (True, True)
     assert receiver == (False, True)
     assert verify(bob.public_key(), bob_sig, forged)
     assert third_party == (True, None)
     assert hmac.compare_digest(bob_tag, original_tag) == same
+
     print('\nPART C | RSA-PSS vs HMAC-SHA256')
     print('Original:', msg.decode())
     print('Bob claims Alice sent:', forged.decode() + ('  (same as the original)' if same else ''))
